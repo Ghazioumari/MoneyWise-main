@@ -5,21 +5,22 @@ trigger:
 variables:
   MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
   NODE_CACHE_FOLDER: $(Pipeline.Workspace)/npm
+  DOCKER_REPOSITORY: your-dockerhub-username
+  IMAGE_TAG: $(Build.BuildId)
 
 stages:
 - stage: Build
   jobs:
-  - job: BuildBackend
+  - job: BuildAndTest
     pool:
       vmImage: 'ubuntu-latest'
     steps:
-    - task: Cache@2
+    - task: SonarQubePrepare@5
       inputs:
-        key: 'maven | "$(Agent.OS)" | **/pom.xml'
-        restoreKeys: |
-          maven | "$(Agent.OS)"
-        path: $(MAVEN_CACHE_FOLDER)
-      displayName: Cache Maven packages
+        SonarQube: 'MoneyWise-SonarQube'
+        scannerMode: 'CLI'
+        configMode: 'file'
+        configFile: 'sonar-project.properties'
 
     - task: Maven@3
       inputs:
@@ -30,18 +31,7 @@ stages:
         javaHomeOption: 'JDKVersion'
         jdkVersionOption: '17'
         mavenVersionOption: 'Default'
-
-  - job: BuildFrontend
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: Cache@2
-      inputs:
-        key: 'npm | "$(Agent.OS)" | frontend/package-lock.json'
-        restoreKeys: |
-          npm | "$(Agent.OS)"
-        path: $(NODE_CACHE_FOLDER)
-      displayName: Cache Node Modules
+        sonarQubeRunAnalysis: true
 
     - task: NodeTool@0
       inputs:
@@ -52,4 +42,28 @@ stages:
         cd frontend
         npm install
         npm run build
-      displayName: 'npm install and build'
+      displayName: 'Build Frontend'
+
+    - task: SonarQubePublish@5
+      inputs:
+        pollingTimeoutSec: '300'
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'MoneyWise-DockerHub'
+        repository: '$(DOCKER_REPOSITORY)/moneywise-backend'
+        command: 'buildAndPush'
+        Dockerfile: 'backend/Dockerfile'
+        tags: |
+          $(IMAGE_TAG)
+          latest
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'MoneyWise-DockerHub'
+        repository: '$(DOCKER_REPOSITORY)/moneywise-frontend'
+        command: 'buildAndPush'
+        Dockerfile: 'frontend/Dockerfile'
+        tags: |
+          $(IMAGE_TAG)
+          latest
