@@ -1,0 +1,17 @@
+all:
+  children:
+    windows:
+      hosts:
+        iis-server:
+          ansible_host: YOUR_IIS_SERVER_IP
+          ansible_user: YOUR_WINDOWS_USER
+          ansible_password: YOUR_WINDOWS_PASSWORD
+          ansible_connection: winrm
+          ansible_winrm_server_cert_validation: ignore
+    
+    monitoring:
+      hosts:
+        prometheus:
+          ansible_host: YOUR_PROMETHEUS_SERVER_IP
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
