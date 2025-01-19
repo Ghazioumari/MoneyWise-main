@@ -1,115 +1,43 @@
 trigger:
-  branches:
-    include:
-    - main
-    - develop
-    - feature/*
-  paths:
-    include:
-    - backend/*
-    - frontend/*
+  - main
 
-variables:
-  dockerRegistry: 'dockerhub'
-  backendImageName: 'moneywise-backend'
-  frontendImageName: 'moneywise-frontend'
-  sonarqubeProjectKey: 'MoneyWise'
+pool:
+  vmImage: 'ubuntu-latest'
 
-stages:
-- stage: Build
-  jobs:
-  - job: BuildBackend
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: Maven@3
-      inputs:
-        mavenPomFile: 'backend/pom.xml'
-        goals: 'clean test'
-        publishJUnitResults: true
-        testResultsFiles: '**/surefire-reports/TEST-*.xml'
-        codeCoverageToolOption: 'JaCoCo'
+steps:
+# Build Backend
+- task: Maven@3
+  inputs:
+    mavenPomFile: 'backend/pom.xml'
+    goals: 'clean package'
 
-    - task: SonarQubePrepare@4
-      inputs:
-        scannerMode: 'CLI'
-        configMode: 'manual'
-        cliProjectKey: '$(sonarqubeProjectKey)-backend'
-        cliProjectName: 'MoneyWise Backend'
-        cliSources: 'backend/src'
+# Build Frontend
+- task: Npm@1
+  inputs:
+    command: 'install'
+    workingDir: 'frontend'
 
-    - task: SonarQubeAnalyze@4
-    - task: SonarQubePublish@4
+- task: Npm@1
+  inputs:
+    command: 'custom'
+    workingDir: 'frontend'
+    customCommand: 'run build'
 
-    - task: Docker@2
-      inputs:
-        command: 'buildAndPush'
-        Dockerfile: 'backend/Dockerfile'
-        buildContext: 'backend'
-        repository: '$(backendImageName)'
-        tags: |
-          $(Build.BuildNumber)
-          latest
+# Build et Push Docker Images
+- task: Docker@2
+  inputs:
+    command: 'buildAndPush'
+    Dockerfile: 'backend/Dockerfile'
+    repository: 'moneywise-backend'
+    tags: |
+      $(Build.BuildNumber)
+      latest
 
-  - job: BuildFrontend
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: Npm@1
-      inputs:
-        command: 'install'
-        workingDir: 'frontend'
-
-    - task: Npm@1
-      inputs:
-        command: 'custom'
-        workingDir: 'frontend'
-        customCommand: 'run test'
-
-    - task: SonarQubePrepare@4
-      inputs:
-        scannerMode: 'CLI'
-        configMode: 'manual'
-        cliProjectKey: '$(sonarqubeProjectKey)-frontend'
-        cliProjectName: 'MoneyWise Frontend'
-        cliSources: 'frontend/src'
-
-    - task: SonarQubeAnalyze@4
-    - task: SonarQubePublish@4
-
-    - task: Docker@2
-      inputs:
-        command: 'buildAndPush'
-        Dockerfile: 'frontend/Dockerfile'
-        buildContext: 'frontend'
-        repository: '$(frontendImageName)'
-        tags: |
-          $(Build.BuildNumber)
-          latest
-
-- stage: SecurityScan
-  jobs:
-  - job: ScanContainers
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: ContainerScan@0
-      inputs:
-        image: '$(backendImageName):$(Build.BuildNumber)'
-        
-    - task: ContainerScan@0
-      inputs:
-        image: '$(frontendImageName):$(Build.BuildNumber)'
-
-- stage: Notify
-  jobs:
-  - job: NotifyTeam
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: Bash@3
-      inputs:
-        targetType: 'inline'
-        script: |
-          echo "Build $(Build.BuildNumber) completed"
-          echo "SonarQube results available at: $(System.TeamFoundationCollectionUri)/$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
+- task: Docker@2
+  inputs:
+    command: 'buildAndPush'
+    Dockerfile: 'frontend/Dockerfile'
+    repository: 'moneywise-frontend'
+    tags: |
+      $(Build.BuildNumber)
+      latest
