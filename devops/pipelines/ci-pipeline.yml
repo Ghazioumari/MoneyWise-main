@@ -10,13 +10,10 @@ trigger:
     - frontend/*
 
 variables:
-  # Docker Registry configuration
   dockerRegistry: 'dockerhub'
-  backendImageName: 'your-dockerhub-username/moneywise-backend'
-  frontendImageName: 'your-dockerhub-username/moneywise-frontend'
-  # SonarQube configuration
+  backendImageName: 'moneywise-backend'
+  frontendImageName: 'moneywise-frontend'
   sonarqubeProjectKey: 'MoneyWise'
-  sonarqubeOrganization: 'your-sonarqube-org'
 
 stages:
 - stage: Build
@@ -35,7 +32,6 @@ stages:
 
     - task: SonarQubePrepare@4
       inputs:
-        SonarQube: 'SonarQube'
         scannerMode: 'CLI'
         configMode: 'manual'
         cliProjectKey: '$(sonarqubeProjectKey)-backend'
@@ -47,19 +43,13 @@ stages:
 
     - task: Docker@2
       inputs:
-        containerRegistry: '$(dockerRegistry)'
-        repository: '$(backendImageName)'
         command: 'buildAndPush'
         Dockerfile: 'backend/Dockerfile'
+        buildContext: 'backend'
+        repository: '$(backendImageName)'
         tags: |
           $(Build.BuildNumber)
           latest
-
-    - task: Bash@3
-      inputs:
-        targetType: 'inline'
-        script: |
-          docker scan $(backendImageName):$(Build.BuildNumber)
 
   - job: BuildFrontend
     pool:
@@ -78,7 +68,6 @@ stages:
 
     - task: SonarQubePrepare@4
       inputs:
-        SonarQube: 'SonarQube'
         scannerMode: 'CLI'
         configMode: 'manual'
         cliProjectKey: '$(sonarqubeProjectKey)-frontend'
@@ -90,26 +79,37 @@ stages:
 
     - task: Docker@2
       inputs:
-        containerRegistry: '$(dockerRegistry)'
-        repository: '$(frontendImageName)'
         command: 'buildAndPush'
         Dockerfile: 'frontend/Dockerfile'
+        buildContext: 'frontend'
+        repository: '$(frontendImageName)'
         tags: |
           $(Build.BuildNumber)
           latest
 
-- stage: Notify
+- stage: SecurityScan
   jobs:
-  - job: SendNotification
+  - job: ScanContainers
     pool:
       vmImage: 'ubuntu-latest'
     steps:
-    - task: SendEmail@1
+    - task: ContainerScan@0
       inputs:
-        To: 'your-email@domain.com'
-        From: 'azure-devops@your-domain.com'
-        Subject: 'Build $(Build.BuildNumber) completed'
-        Body: |
-          Build $(Build.BuildNumber) has completed.
-          SonarQube results: $(System.TeamFoundationCollectionUri)/$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)
-          Docker images have been pushed to registry.
+        image: '$(backendImageName):$(Build.BuildNumber)'
+        
+    - task: ContainerScan@0
+      inputs:
+        image: '$(frontendImageName):$(Build.BuildNumber)'
+
+- stage: Notify
+  jobs:
+  - job: NotifyTeam
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Bash@3
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "Build $(Build.BuildNumber) completed"
+          echo "SonarQube results available at: $(System.TeamFoundationCollectionUri)/$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)"
