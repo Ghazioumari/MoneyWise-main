@@ -1,0 +1,48 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+  SONAR_PROJECT_KEY: 'MoneyWise'
+  SONAR_ORGANIZATION: 'your-sonar-org'
+
+steps:
+- task: Cache@2
+  inputs:
+    key: 'maven | "$(Agent.OS)" | **/pom.xml'
+    restoreKeys: |
+      maven | "$(Agent.OS)"
+    path: $(MAVEN_CACHE_FOLDER)
+  displayName: Cache Maven packages
+
+- task: SonarQubePrepare@5
+  inputs:
+    SonarQube: 'SonarQube'
+    scannerMode: 'Other'
+    extraProperties: |
+      sonar.projectKey=$(SONAR_PROJECT_KEY)
+      sonar.organization=$(SONAR_ORGANIZATION)
+      sonar.sources=.
+      sonar.java.binaries=backend/target/classes
+      sonar.coverage.jacoco.xmlReportPaths=backend/target/site/jacoco/jacoco.xml
+
+- task: Maven@3
+  inputs:
+    mavenPomFile: 'backend/pom.xml'
+    goals: 'clean verify sonar:sonar'
+    publishJUnitResults: true
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '17'
+    mavenVersionOption: 'Default'
+    mavenOptions: '-Xmx3072m'
+    mavenAuthenticateFeed: false
+    effectivePomSkip: false
+    sonarQubeRunAnalysis: true
+
+- task: SonarQubePublish@5
+  inputs:
+    pollingTimeoutSec: '300'

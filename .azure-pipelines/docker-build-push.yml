@@ -1,0 +1,38 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  DOCKER_REPOSITORY: 'your-dockerhub-username'
+  IMAGE_NAME_BACKEND: 'moneywise-backend'
+  IMAGE_NAME_FRONTEND: 'moneywise-frontend'
+  TAG: '$(Build.BuildId)'
+
+stages:
+- stage: BuildAndPushDocker
+  jobs:
+  - job: DockerBuild
+    steps:
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: '$(DOCKER_REPOSITORY)/$(IMAGE_NAME_BACKEND)'
+        command: 'buildAndPush'
+        Dockerfile: 'backend/Dockerfile'
+        tags: |
+          $(TAG)
+          latest
+      displayName: 'Build and Push Backend Docker Image'
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: '$(DOCKER_REPOSITORY)/$(IMAGE_NAME_FRONTEND)'
+        command: 'buildAndPush'
+        Dockerfile: 'frontend/Dockerfile'
+        tags: |
+          $(TAG)
+          latest
+      displayName: 'Build and Push Frontend Docker Image'

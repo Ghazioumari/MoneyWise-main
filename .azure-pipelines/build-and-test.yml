@@ -1,0 +1,57 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+  NODE_CACHE_FOLDER: $(Pipeline.Workspace)/npm
+
+stages:
+- stage: BuildAndTest
+  jobs:
+  - job: BackendBuild
+    steps:
+    - task: Cache@2
+      inputs:
+        key: 'maven | "$(Agent.OS)" | **/pom.xml'
+        restoreKeys: |
+          maven | "$(Agent.OS)"
+        path: $(MAVEN_CACHE_FOLDER)
+      displayName: Cache Maven packages
+
+    - task: Maven@3
+      inputs:
+        mavenPomFile: 'backend/pom.xml'
+        goals: 'clean package'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '17'
+        mavenVersionOption: 'Default'
+        mavenOptions: '-Xmx3072m'
+        mavenAuthenticateFeed: false
+      displayName: 'Build and Test Backend'
+
+  - job: FrontendBuild
+    steps:
+    - task: Cache@2
+      inputs:
+        key: 'npm | "$(Agent.OS)" | frontend/package-lock.json'
+        restoreKeys: |
+          npm | "$(Agent.OS)"
+        path: $(NODE_CACHE_FOLDER)
+      displayName: Cache NPM packages
+
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '18.x'
+      displayName: 'Install Node.js'
+
+    - script: |
+        cd frontend
+        npm ci
+        npm run build
+        npm test
+      displayName: 'Build and Test Frontend'
